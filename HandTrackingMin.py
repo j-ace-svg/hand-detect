@@ -43,6 +43,12 @@ while True:
                         fingerCoordinates["thumb_k"] = (centerx, centery, centerz)
                     case 5: # Index tip
                         fingerCoordinates["index_k"] = (centerx, centery, centerz)
+                    case 9: # Middle knuckle
+                        fingerCoordinates["middle_k"] = (centerx, centery, centerz)
+                    case 13: # Ring knuckle
+                        fingerCoordinates["ring_k"] = (centerx, centery, centerz)
+                    case 17: # Pinky knuckle
+                        fingerCoordinates["pinky_k"] = (centerx, centery, centerz)
                     case 4: # Thumb tip
                         fingerCoordinates["thumb_t"] = (centerx, centery, centerz)
                     case 8: # Index tip
@@ -59,16 +65,25 @@ while True:
                     cv2.circle(img, (centerx, centery), int(c / 1), (255, 0, 255), cv2.FILLED)
                 cv2.putText(img,str(id), (centerx + 10, centery + 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 1)
             
+            # Pinch Gesture
             if fingerCoordinates.keys() >= {"thumb_t", "index_t"}:
                 if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30):
                     print("pinch")
             
+            # Vulcan Gesture
             if fingerCoordinates.keys() >= {"thumb_k", "index_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
                 if (calc_landmark_distance(fingerCoordinates, "thumb_k", "index_k") > 70 and
                     calc_landmark_distance(fingerCoordinates, "index_t", "middle_t") < 50 and
                     calc_landmark_distance(fingerCoordinates, "middle_t", "ring_t") > 50 and
                     calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t") < 50):
                     print("vulcan")
+
+            # OK Gesture
+            if fingerCoordinates.keys() >= {"thumb_k", "index_k", "middle_k", "ring_k", "pinky_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30 and
+                    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") < 100 # continue conditions here
+                    ):
+                    pass
 
     currentTime = time.time()
     fps = 1/(currentTime - previousTime)
