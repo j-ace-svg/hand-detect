@@ -21,7 +21,7 @@ def calc_landmark_distance(fingerCoordinates, landmarkStart, landmarkEnd):
                       math.pow(fingerCoordinates[landmarkStart][0] - fingerCoordinates[landmarkEnd][0], 2) +
                       math.pow(fingerCoordinates[landmarkStart][1] - fingerCoordinates[landmarkEnd][1], 2) +
                       math.pow(fingerCoordinates[landmarkStart][2] - fingerCoordinates[landmarkEnd][2], 2)
-                    )
+                    ) / fingerCoordinates["scalar"]
 
 while True:
     success, img = cap.read()
@@ -39,6 +39,8 @@ while True:
                 height, width, c = img.shape
                 centerx, centery, centerz = int(landmark.x*width), int(landmark.y*height), int(landmark.z*height)
                 match id:
+                    case 0: # Wrist
+                        fingerCoordinates["wrist"] = (centerx, centery, centerz)
                     case 2: # Thumb knuckle
                         fingerCoordinates["thumb_k"] = (centerx, centery, centerz)
                     case 5: # Index tip
@@ -65,25 +67,52 @@ while True:
                     cv2.circle(img, (centerx, centery), int(c / 1), (255, 0, 255), cv2.FILLED)
                 cv2.putText(img,str(id), (centerx + 10, centery + 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 1)
             
+            # Cache distance scaling factor
+            fingerCoordinates["scalar"] = math.sqrt(
+                math.pow(fingerCoordinates["index_k"][0] - fingerCoordinates["wrist"][0], 2) + 
+                math.pow(fingerCoordinates["index_k"][1] - fingerCoordinates["wrist"][1], 2) + 
+                math.pow(fingerCoordinates["index_k"][2] - fingerCoordinates["wrist"][2], 2)
+            )
+
+            gesture_distances = {
+                "pinch": 0.21,
+                "extend": 0.45,
+                "clamp_index-middle": 0.28,
+                "clamp_ring-pinky": 0.33,
+                "split_thumb-index": 0.315
+            }
+
             # Pinch Gesture
             if fingerCoordinates.keys() >= {"thumb_t", "index_t"}:
-                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30):
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch"]):
                     print("pinch")
+                    pass
             
             # Vulcan Gesture
             if fingerCoordinates.keys() >= {"thumb_k", "index_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
-                if (calc_landmark_distance(fingerCoordinates, "thumb_k", "index_k") > 70 and
-                    calc_landmark_distance(fingerCoordinates, "index_t", "middle_t") < 50 and
-                    calc_landmark_distance(fingerCoordinates, "middle_t", "ring_t") > 50 and
-                    calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t") < 50):
+                if (calc_landmark_distance(fingerCoordinates, "thumb_k", "index_k") > gesture_distances["split_thumb-index"] and
+                    calc_landmark_distance(fingerCoordinates, "index_t", "middle_t") < gesture_distances["clamp_index-middle"] and
+                    calc_landmark_distance(fingerCoordinates, "middle_t", "ring_t") > gesture_distances["clamp_index-middle"] and
+                    calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t") < gesture_distances["clamp_ring-pinky"]):
                     print("vulcan")
 
             # OK Gesture
             if fingerCoordinates.keys() >= {"thumb_k", "index_k", "middle_k", "ring_k", "pinky_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
-                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30 and
-                    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") < 100 # continue conditions here
-                    ):
-                    pass
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch"] and
+                    calc_landmark_distance(fingerCoordinates, "index_k", "middle_t") > gesture_distances["extend"] and
+                    calc_landmark_distance(fingerCoordinates, "index_k", "index_t") > gesture_distances["extend"] and
+                    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") > gesture_distances["extend"] and
+                    calc_landmark_distance(fingerCoordinates, "ring_k", "ring_t") > gesture_distances["extend"] and
+                    calc_landmark_distance(fingerCoordinates, "pinky_k", "pinky_t") > gesture_distances["extend"]):
+                    print("ok")
+                    #pass
+                print(calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t"))
+                #print(calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30,
+                #    calc_landmark_distance(fingerCoordinates, "index_k", "middle_t") > 100,
+                #    calc_landmark_distance(fingerCoordinates, "index_k", "index_t") > 100,
+                #    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") > 100,
+                #    calc_landmark_distance(fingerCoordinates, "ring_k", "ring_t") > 100,
+                #    calc_landmark_distance(fingerCoordinates, "pinky_k", "pinky_t") > 100)
 
     currentTime = time.time()
     fps = 1/(currentTime - previousTime)
