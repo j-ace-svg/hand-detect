@@ -75,18 +75,82 @@ while True:
             )
 
             gesture_distances = {
-                "pinch": 0.21,
-                "extend": 0.45,
+                "pinch-index": 0.24,
+                "pinch-middle": 0.26,
+                "pinch-ring": 0.24,
+                "pinch-pinky": 0.26,
+                "extend-thumb": 0.45,
+                "extend-index": 0.45,
+                "extend-middle": 0.43,
+                "extend-ring": 0.45,
+                "extend-pinky": 0.45,
                 "clamp_index-middle": 0.28,
                 "clamp_ring-pinky": 0.33,
-                "split_thumb-index": 0.315
+                "split_thumb-index": 0.50
             }
 
-            # Pinch Gesture
+            pinch_list = [False, False, False, False]
+            extend_list = [False, False, False, False, False]
+
+            # Pinch index Gesture
             if fingerCoordinates.keys() >= {"thumb_t", "index_t"}:
-                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch"]):
-                    print("pinch")
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch-index"]):
+                    #print("pinch index")
+                    pinch_list[0] = True
                     pass
+
+            # Pinch middle Gesture
+            if fingerCoordinates.keys() >= {"thumb_t", "middle_t"}:
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "middle_t") < gesture_distances["pinch-middle"]):
+                    #print("pinch middle")
+                    pinch_list[1] = True
+
+            # Pinch ring Gesture
+            if fingerCoordinates.keys() >= {"thumb_t", "ring_t"}:
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "ring_t") < gesture_distances["pinch-ring"]):
+                    #print("pinch ring")
+                    pinch_list[2] = True
+
+            # Pinch pinky Gesture
+            if fingerCoordinates.keys() >= {"thumb_t", "pinky_t"}:
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "pinky_t") < gesture_distances["pinch-pinky"]):
+                    #print("pinch pinky")
+                    pinch_list[3] = True
+
+            # Extend thumb Gesture
+            if fingerCoordinates.keys() >= {"thumb_t", "thumb_k"}:
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_k") > gesture_distances["split_thumb-index"] and
+                    calc_landmark_distance(fingerCoordinates, "thumb_t", "wrist") > calc_landmark_distance(fingerCoordinates, "thumb_k", "wrist")):
+                    #print("pinch pinky")
+                    extend_list[0] = True
+
+            # Extend index Gesture
+            if fingerCoordinates.keys() >= {"index_t", "index_k"}:
+                if (calc_landmark_distance(fingerCoordinates, "index_t", "index_k") > gesture_distances["extend-index"] and
+                    calc_landmark_distance(fingerCoordinates, "index_t", "wrist") > calc_landmark_distance(fingerCoordinates, "index_k", "wrist")):
+                    #print("pinch pinky")
+                    extend_list[1] = True
+
+            # Extend middle Gesture
+            if fingerCoordinates.keys() >= {"middle_t", "middle_k"}:
+                if (calc_landmark_distance(fingerCoordinates, "middle_t", "middle_k") > gesture_distances["extend-middle"] and
+                    calc_landmark_distance(fingerCoordinates, "middle_t", "wrist") > calc_landmark_distance(fingerCoordinates, "middle_k", "wrist")):
+                    #print("pinch pinky")
+                    extend_list[2] = True
+
+            # Extend ring Gesture
+            if fingerCoordinates.keys() >= {"ring_t", "ring_k"}:
+                if (calc_landmark_distance(fingerCoordinates, "ring_t", "ring_k") > gesture_distances["extend-ring"] and
+                    calc_landmark_distance(fingerCoordinates, "ring_t", "wrist") > calc_landmark_distance(fingerCoordinates, "ring_k", "wrist")):
+                    #print("pinch pinky")
+                    extend_list[3] = True
+
+            # Extend pinky Gesture
+            if fingerCoordinates.keys() >= {"pinky_t", "pinky_k"}:
+                if (calc_landmark_distance(fingerCoordinates, "pinky_t", "pinky_k") > gesture_distances["extend-pinky"] and
+                    calc_landmark_distance(fingerCoordinates, "pinky_t", "wrist") > calc_landmark_distance(fingerCoordinates, "pinky_k", "wrist")):
+                    #print("pinch pinky")
+                    extend_list[4] = True
             
             # Vulcan Gesture
             if fingerCoordinates.keys() >= {"thumb_k", "index_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
@@ -94,19 +158,22 @@ while True:
                     calc_landmark_distance(fingerCoordinates, "index_t", "middle_t") < gesture_distances["clamp_index-middle"] and
                     calc_landmark_distance(fingerCoordinates, "middle_t", "ring_t") > gesture_distances["clamp_index-middle"] and
                     calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t") < gesture_distances["clamp_ring-pinky"]):
-                    print("vulcan")
+                    #print("vulcan")
+                    pass
 
             # OK Gesture
             if fingerCoordinates.keys() >= {"thumb_k", "index_k", "middle_k", "ring_k", "pinky_k", "thumb_t", "index_t", "middle_t", "ring_t", "pinky_t"}:
-                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch"] and
-                    calc_landmark_distance(fingerCoordinates, "index_k", "middle_t") > gesture_distances["extend"] and
-                    calc_landmark_distance(fingerCoordinates, "index_k", "index_t") > gesture_distances["extend"] and
-                    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") > gesture_distances["extend"] and
-                    calc_landmark_distance(fingerCoordinates, "ring_k", "ring_t") > gesture_distances["extend"] and
-                    calc_landmark_distance(fingerCoordinates, "pinky_k", "pinky_t") > gesture_distances["extend"]):
-                    print("ok")
-                    #pass
-                print(calc_landmark_distance(fingerCoordinates, "ring_t", "pinky_t"))
+                if (calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < gesture_distances["pinch-index"] and
+                    calc_landmark_distance(fingerCoordinates, "index_k", "middle_t") > gesture_distances["extend-index"] and
+                    calc_landmark_distance(fingerCoordinates, "index_k", "index_t") > gesture_distances["extend-index"] and
+                    calc_landmark_distance(fingerCoordinates, "middle_k", "middle_t") > gesture_distances["extend-index"] and
+                    calc_landmark_distance(fingerCoordinates, "ring_k", "ring_t") > gesture_distances["extend-index"] and
+                    calc_landmark_distance(fingerCoordinates, "pinky_k", "pinky_t") > gesture_distances["extend-index"]):
+                    #print("ok")
+                    pass
+                #print(calc_landmark_distance(fingerCoordinates, "thumb_t", "index_k"))
+                #print(pinch_list[0], pinch_list[1], pinch_list[2], pinch_list[3])
+                print(extend_list[0], extend_list[1], extend_list[2], extend_list[3], extend_list[4])
                 #print(calc_landmark_distance(fingerCoordinates, "thumb_t", "index_t") < 30,
                 #    calc_landmark_distance(fingerCoordinates, "index_k", "middle_t") > 100,
                 #    calc_landmark_distance(fingerCoordinates, "index_k", "index_t") > 100,
