@@ -57,7 +57,7 @@ def processHands(results):
                 fingerCoordinates["pinky_t"] = (centerx, centery, centerz)
             case _:
                 pass
-        if id == 4:
+        if id in (5, 17, 0):
             cv2.circle(img, (centerx, centery), int(c / 1), (255, 0, 255), cv2.FILLED)
         cv2.putText(img,str(id), (centerx + 10, centery + 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 1)
     
@@ -175,16 +175,44 @@ def processHands(results):
         #    calc_landmark_distance(fingerCoordinates, "ring_k", "ring_t") > 100,
         #    calc_landmark_distance(fingerCoordinates, "pinky_k", "pinky_t") > 100)
 
-    return int(extend_list[0]) - int(extend_list[1])
+    hand_plane = []
+    if fingerCoordinates.keys() >= {"wrist"}:
+        hand_plane.append(fingerCoordinates["wrist"])
+    else:
+        hand_plane.append((0, 0, 0))
+    if fingerCoordinates.keys() >= {"index_k"}:
+        hand_plane.append(fingerCoordinates["index_k"])
+    else:
+        hand_plane.append((0, 0, 0))
+    if fingerCoordinates.keys() >= {"pinky_k"}:
+        hand_plane.append(fingerCoordinates["pinky_k"])
+    else:
+        hand_plane.append((0, 0, 0))
+
+    return hand_plane, int(extend_list[0]) - int(extend_list[1])
 
 class Ball():
     def __init__(self, startx, starty):
         self.x = startx
         self.y = starty
+        self.velocity = [3, 3]
+        self.screen_width, self.screen_height = 0, 0
         self.radius = 5
     
     def draw(self, img: cv2.typing.MatLike):
         cv2.circle(img, (self.x, self.y), self.radius, (255, 0, 0), cv2.FILLED)
+    
+    def update(self):
+        try:
+            _, _, self.screen_width, self.screen_height = cv2.getWindowImageRect("Image")
+        except:
+            pass
+        self.x += self.velocity[0]
+        self.y += self.velocity[1]
+        if self.x + self.radius + self.velocity[0] > self.screen_width or self.x - self.radius + self.velocity[0] < 0:
+            self.velocity[0] = -self.velocity[0]
+        if self.y + self.radius + self.velocity[1] > self.screen_height or self.y - self.radius + self.velocity[1] < 0:
+            self.velocity[1] = -self.velocity[1]
 
 ball = Ball(20, 20)
 
@@ -196,13 +224,16 @@ while True:
 
     movement = [0, 0]
 
+    plane_coords = [[(0, 0, 0), (0, 0, 0), (0, 0, 0)], [(0, 0, 0), (0, 0, 0), (0, 0, 0)]]
+
     if results.multi_hand_landmarks:
         for handLandmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
             handedness_dict = MessageToDict(handedness)
-            movement[handedness_dict["classification"][0]["index"]] = processHands(results)
+            plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = processHands(results)
     
-    print(movement)
+    print(movement, plane_coords)
 
+    ball.update()
     ball.draw(img)
 
     currentTime = time.time()
