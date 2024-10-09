@@ -214,6 +214,18 @@ class Ball():
         if self.y + self.radius + self.velocity[1] > self.screen_height or self.y - self.radius + self.velocity[1] < 0:
             self.velocity[1] = -self.velocity[1]
 
+def calcPlanePaddle(plane_coords):
+    pointA = plane_coords[0]
+    pointB = plane_coords[1]
+    pointC = plane_coords[2]
+
+    vectorAB = (pointB[0] - pointA[0], pointB[1] - pointA[1], pointB[2] - pointA[2])
+    vectorAC = (pointC[0] - pointA[0], pointC[1] - pointA[1], pointC[2] - pointA[2])
+
+    cross_product = ([vectorAB[1]*vectorAC[2] - vectorAB[2]*vectorAC[1],
+                      vectorAB[2]*vectorAC[0] - vectorAB[0]*vectorAC[2],
+                      vectorAB[0]*vectorAC[1] - vectorAB[1]*vectorAC[0]])
+
 ball = Ball(20, 20)
 
 while True:
