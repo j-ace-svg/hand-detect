@@ -304,6 +304,8 @@ while True:
     ball.update()
     ball.paddle_bounce(paddle_coords)
     ball.draw(img)
+    for paddle in paddle_coords:
+        cv2.line(img, paddle[0], paddle[1], (0, 0, 255), 5)
 
     current_time = time.time()
     fps = 1/(current_time - previous_time)
