@@ -3,6 +3,8 @@ import mediapipe as mp
 from google.protobuf.json_format import MessageToDict
 import time
 import math
+from operator import add, sub, mul
+from functools import partial
 
 cap = cv2.VideoCapture(0 + cv2.CAP_DSHOW)
 
@@ -14,8 +16,8 @@ hands = mpHands.Hands(static_image_mode=False,
                       max_num_hands=2)
 mpDraw = mp.solutions.drawing_utils
 
-previousTime = 0
-currentTime = 0
+previous_time = 0
+current_time = 0
 
 def calc_landmark_distance(fingerCoordinates, landmarkStart, landmarkEnd):
     return math.sqrt(
@@ -24,7 +26,7 @@ def calc_landmark_distance(fingerCoordinates, landmarkStart, landmarkEnd):
                       math.pow(fingerCoordinates[landmarkStart][2] - fingerCoordinates[landmarkEnd][2], 2)
                     ) / fingerCoordinates["scalar"]
 
-def processHands(results):
+def process_hands(results):
     fingerCoordinates = {}
     mpDraw.draw_landmarks(img, handLandmarks, mpHands.HAND_CONNECTIONS)
 
@@ -214,17 +216,35 @@ class Ball():
         if self.y + self.radius + self.velocity[1] > self.screen_height or self.y - self.radius + self.velocity[1] < 0:
             self.velocity[1] = -self.velocity[1]
 
-def calcPlanePaddle(plane_coords):
-    pointA = plane_coords[0]
-    pointB = plane_coords[1]
-    pointC = plane_coords[2]
+def calc_paddle(plane_coords):
+    point_a = plane_coords[0]
+    point_b = plane_coords[1]
+    point_c = plane_coords[2]
 
-    vectorAB = (pointB[0] - pointA[0], pointB[1] - pointA[1], pointB[2] - pointA[2])
-    vectorAC = (pointC[0] - pointA[0], pointC[1] - pointA[1], pointC[2] - pointA[2])
+    #vector_a_b = (point_b[0] - point_a[0], point_b[1] - point_a[1], point_b[2] - point_a[2])
+    #vector_a_c = (point_c[0] - point_a[0], point_c[1] - point_a[1], point_c[2] - point_a[2])
 
-    cross_product = ([vectorAB[1]*vectorAC[2] - vectorAB[2]*vectorAC[1],
-                      vectorAB[2]*vectorAC[0] - vectorAB[0]*vectorAC[2],
-                      vectorAB[0]*vectorAC[1] - vectorAB[1]*vectorAC[0]])
+    #cross_product = ([vector_a_b[1]*vector_a_c[2] - vector_a_b[2]*vector_a_c[1],
+    #                  vector_a_b[2]*vector_a_c[0] - vector_a_b[0]*vector_a_c[2],
+    #                  vector_a_b[0]*vector_a_c[1] - vector_a_b[1]*vector_a_c[0]])
+
+    #coef_x, coef_y, coef_z = cross_product
+    #plane_const = (coef_x * point_a[0]) + (coef_y * point_a[1]) + (coef_z * point_a[2])
+
+    hand_center = ((2 * point_a[0] + point_b[0] + point_c[0]) / 4,
+                  (2 * point_a[1] + point_b[1] + point_c[1]) / 4)
+
+    paddle_direction = (point_a[0] - hand_center[0], point_a[1] - hand_center[1])
+    paddle_direction = map(sub, point_a, hand_center)
+    paddle_direction_magnitude = sqrt(sum(map(partial(math.pow, y=2), paddle_direction)))
+    paddle_direction_normalized = map(partial(mul, 1/paddle_direction_magnitude), paddle_direction)
+
+    paddle_size = 1
+
+    paddle_start = tuple(map(sub, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
+    paddle_end = tuple(map(add, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
+
+    return [paddle_start, paddle_end]
 
 ball = Ball(20, 20)
 
@@ -241,16 +261,17 @@ while True:
     if results.multi_hand_landmarks:
         for handLandmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
             handedness_dict = MessageToDict(handedness)
-            plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = processHands(results)
+            plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = process_hands(results)
     
     print(movement, plane_coords)
+    paddle_coords = [calc_paddle(hand) for hand in plane_coords]
 
     ball.update()
     ball.draw(img)
 
-    currentTime = time.time()
-    fps = 1/(currentTime - previousTime)
-    previousTime = currentTime
+    current_time = time.time()
+    fps = 1/(current_time - previous_time)
+    previous_time = current_time
     cv2.putText(img, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 3,
                 (255, 0, 255), 3)
 
