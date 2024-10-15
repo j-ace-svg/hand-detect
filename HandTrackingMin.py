@@ -6,6 +6,8 @@ import math
 from operator import add, sub, mul
 from functools import partial
 
+EPSILON = 0.0001
+
 cap = cv2.VideoCapture(0 + cv2.CAP_DSHOW)
 
 mp_hands = mp.solutions.hands
@@ -208,7 +210,7 @@ class Ball():
         # Based on code from https://stackoverflow.com/a/67117213
         x1, y1 = paddle_start
         x2, y2 = paddle_end
-        cx, cy, r = self.startx, self.starty, self.radius
+        cx, cy, r = self.x, self.y, self.radius
         x_linear = x2 - x1
         x_constant = x1 - cx
         y_linear = y2 - y1
@@ -224,19 +226,19 @@ class Ball():
 
     def paddle_bounce(self, paddles):
         for paddle in paddles:
-            if not intersects_paddle(paddle[0], paddle[1]):
+            if not self.intersects_paddle(paddle[0], paddle[1]):
                 continue
-            paddle_vec = map(sub, paddle[0], paddle[1])
+            paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
             paddle_vec_mag = math.sqrt(sum(map(partial(pow, exp=2), paddle_vec)))
-            paddle_vec_norm = map(partial(mul, 1/paddle_vec_mag), paddle_vec)
+            paddle_vec_norm = tuple(map(partial(mul, 1/max(paddle_vec_mag, EPSILON)), paddle_vec))
 
             dot_prod_a = sum(map(mul, self.velocity, paddle_vec_norm))
-            proj_a = map(partial(mul, 1/dot_prod_a), paddle_vec_norm)
+            proj_a = tuple(map(partial(mul, 1/max(dot_prod_a, EPSILON)), paddle_vec_norm))
 
             paddle_norm_left = (-paddle_vec_norm[1], paddle_vec_norm[0])
             dot_prod_b = sum(map(mul, self.velocity, paddle_norm_left))
-            proj_b = map(partial(mul, 1/dot_prod_b), paddle_norm_left)
-            new_velocity = proj_a - proj_b
+            proj_b = tuple(map(partial(mul, 1/max(dot_prod_b, EPSILON)), paddle_norm_left))
+            new_velocity = tuple(map(sub, proj_a, proj_b))
             self.velocity = new_velocity
     
     def update(self):
@@ -269,16 +271,17 @@ def calc_paddle(plane_coords):
     hand_center = ((2 * point_a[0] + point_b[0] + point_c[0]) / 4,
                   (2 * point_a[1] + point_b[1] + point_c[1]) / 4)
 
-    paddle_direction = (point_a[0] - hand_center[0], point_a[1] - hand_center[1])
-    paddle_direction = map(sub, point_a, hand_center)
+    #paddle_direction = (point_a[0] - hand_center[0], point_a[1] - hand_center[1])
+    paddle_direction = tuple(map(sub, point_a, hand_center))
     paddle_direction_magnitude = math.sqrt(sum(map(partial(pow, exp=2), paddle_direction)))
-    paddle_direction_normalized = map(partial(mul, 1/paddle_direction_magnitude), paddle_direction)
+    paddle_direction_normalized = tuple(map(partial(mul, 1/max(paddle_direction_magnitude, EPSILON)), paddle_direction))
 
     paddle_size = 1
 
     paddle_start = tuple(map(sub, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
     paddle_end = tuple(map(add, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
 
+    #print(paddle_direction)
     return [paddle_start, paddle_end]
 
 ball = Ball(20, 20)
@@ -298,13 +301,16 @@ while True:
             handedness_dict = MessageToDict(handedness)
             plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = process_hands(results)
     
-    print(movement, plane_coords)
+    #print(movement, plane_coords)
     paddle_coords = [calc_paddle(hand) for hand in plane_coords]
+    #print(paddle_coords)
+    assert(len(paddle_coords[0][0]) == 2)
 
     ball.update()
     ball.paddle_bounce(paddle_coords)
     ball.draw(img)
     for paddle in paddle_coords:
+        print(paddle)
         cv2.line(img, paddle[0], paddle[1], (0, 0, 255), 5)
 
     current_time = time.time()
