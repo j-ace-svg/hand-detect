@@ -235,20 +235,31 @@ class Ball():
             self.last_contact_player = player
             paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
             paddle_vec_mag = math.sqrt(sum(map(partial(pow, exp=2), paddle_vec)))
-            paddle_vec_norm = tuple(map(partial(mul, 1/max(paddle_vec_mag, EPSILON)), paddle_vec))
+            if abs(paddle_vec_mag) < EPSILON:
+                paddle_vec_mag = EPSILON * 1 if paddle_vec_mag > 0 else -1
+            paddle_vec_normalized = tuple(map(partial(mul, 1/paddle_vec_mag), paddle_vec))
 
-            dot_prod_a = sum(map(mul, self.velocity, paddle_vec_norm))
+            '''
+            dot_prod_a = sum(map(mul, self.velocity, paddle_vec_normalized))
             if abs(dot_prod_a) < EPSILON:
-                dot_prod_a = EPSILON
-            proj_a = tuple(map(partial(mul, 1/dot_prod_a), paddle_vec_norm))
+                dot_prod_a = EPSILON * 1 if dot_prod_a > 0 else -1
+            proj_a = tuple(map(partial(mul, 1/dot_prod_a), paddle_vec_normalized))
             print(dot_prod_a, proj_a)
 
-            paddle_norm_left = (-paddle_vec_norm[1], paddle_vec_norm[0])
+            paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
             dot_prod_b = sum(map(mul, self.velocity, paddle_norm_left))
             if abs(dot_prod_b) < EPSILON:
-                dot_prod_b = EPSILON
+                dot_prod_b = EPSILON * 1 if dot_prod_b > 0 else -1
             proj_b = tuple(map(partial(mul, 1/dot_prod_b), paddle_norm_left))
             new_velocity = list(map(sub, proj_a, proj_b))
+            self.velocity = new_velocity
+            '''
+            paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
+            dot_prod = sum(map(mul, self.velocity, paddle_norm_left))
+
+            deflection = tuple(map(partial(mul, (-2 * dot_prod)), paddle_norm_left))
+            print(deflection, self.velocity)
+            new_velocity = list(map(add, self.velocity, deflection))
             self.velocity = new_velocity
     
     def update(self):
