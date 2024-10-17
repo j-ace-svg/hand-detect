@@ -238,22 +238,7 @@ class Ball():
             if abs(paddle_vec_mag) < EPSILON:
                 paddle_vec_mag = EPSILON * 1 if paddle_vec_mag > 0 else -1
             paddle_vec_normalized = tuple(map(partial(mul, 1/paddle_vec_mag), paddle_vec))
-
-            '''
-            dot_prod_a = sum(map(mul, self.velocity, paddle_vec_normalized))
-            if abs(dot_prod_a) < EPSILON:
-                dot_prod_a = EPSILON * 1 if dot_prod_a > 0 else -1
-            proj_a = tuple(map(partial(mul, 1/dot_prod_a), paddle_vec_normalized))
-            print(dot_prod_a, proj_a)
-
-            paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
-            dot_prod_b = sum(map(mul, self.velocity, paddle_norm_left))
-            if abs(dot_prod_b) < EPSILON:
-                dot_prod_b = EPSILON * 1 if dot_prod_b > 0 else -1
-            proj_b = tuple(map(partial(mul, 1/dot_prod_b), paddle_norm_left))
-            new_velocity = list(map(sub, proj_a, proj_b))
-            self.velocity = new_velocity
-            '''
+            
             paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
             dot_prod = sum(map(mul, self.velocity, paddle_norm_left))
 
