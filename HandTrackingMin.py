@@ -200,14 +200,17 @@ class Ball():
         self.x = startx
         self.y = starty
         self.velocity = [3, 3]
+        self.last_contact_player = -1
         self.screen_width, self.screen_height = 0, 0
         self.radius = 5
     
     def draw(self, img: cv2.typing.MatLike):
-        cv2.circle(img, (self.x, self.y), self.radius, (255, 0, 0), cv2.FILLED)
+        cv2.circle(img, (int(self.x), int(self.y)), self.radius, (255, 0, 0), cv2.FILLED)
 
     def intersects_paddle(self, paddle_start, paddle_end):
         # Based on code from https://stackoverflow.com/a/67117213
+        if paddle_start == paddle_end:
+            return False
         x1, y1 = paddle_start
         x2, y2 = paddle_end
         cx, cy, r = self.x, self.y, self.radius
@@ -218,27 +221,34 @@ class Ball():
         a = x_linear * x_linear + y_linear * y_linear
         half_b = x_linear * x_constant + y_linear * y_constant
         c = x_constant * x_constant + y_constant * y_constant - r * r
-        return (
+        intersects = (
           half_b * half_b >= a * c and
           (-half_b <= a or c + half_b + half_b + a <= 0) and
           (half_b <= 0 or c <= 0)
         )
+        return intersects
 
     def paddle_bounce(self, paddles):
-        for paddle in paddles:
-            if not self.intersects_paddle(paddle[0], paddle[1]):
+        for player, paddle in enumerate(paddles):
+            if self.last_contact_player == player or not self.intersects_paddle(paddle[0], paddle[1]):
                 continue
+            self.last_contact_player = player
             paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
             paddle_vec_mag = math.sqrt(sum(map(partial(pow, exp=2), paddle_vec)))
             paddle_vec_norm = tuple(map(partial(mul, 1/max(paddle_vec_mag, EPSILON)), paddle_vec))
 
             dot_prod_a = sum(map(mul, self.velocity, paddle_vec_norm))
-            proj_a = tuple(map(partial(mul, 1/max(dot_prod_a, EPSILON)), paddle_vec_norm))
+            if abs(dot_prod_a) < EPSILON:
+                dot_prod_a = EPSILON
+            proj_a = tuple(map(partial(mul, 1/dot_prod_a), paddle_vec_norm))
+            print(dot_prod_a, proj_a)
 
             paddle_norm_left = (-paddle_vec_norm[1], paddle_vec_norm[0])
             dot_prod_b = sum(map(mul, self.velocity, paddle_norm_left))
-            proj_b = tuple(map(partial(mul, 1/max(dot_prod_b, EPSILON)), paddle_norm_left))
-            new_velocity = tuple(map(sub, proj_a, proj_b))
+            if abs(dot_prod_b) < EPSILON:
+                dot_prod_b = EPSILON
+            proj_b = tuple(map(partial(mul, 1/dot_prod_b), paddle_norm_left))
+            new_velocity = list(map(sub, proj_a, proj_b))
             self.velocity = new_velocity
     
     def update(self):
@@ -276,12 +286,11 @@ def calc_paddle(plane_coords):
     paddle_direction_magnitude = math.sqrt(sum(map(partial(pow, exp=2), paddle_direction)))
     paddle_direction_normalized = tuple(map(partial(mul, 1/max(paddle_direction_magnitude, EPSILON)), paddle_direction))
 
-    paddle_size = 1
+    paddle_size = 40
 
     paddle_start = tuple(map(sub, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
     paddle_end = tuple(map(add, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
 
-    #print(paddle_direction)
     return [paddle_start, paddle_end]
 
 ball = Ball(20, 20)
@@ -310,8 +319,8 @@ while True:
     ball.paddle_bounce(paddle_coords)
     ball.draw(img)
     for paddle in paddle_coords:
-        print(paddle)
-        cv2.line(img, paddle[0], paddle[1], (0, 0, 255), 5)
+        paddle_int = [tuple(map(int, point)) for point in paddle]
+        cv2.line(img, paddle_int[0], paddle_int[1], (0, 0, 255), 2)
 
     current_time = time.time()
     fps = 1/(current_time - previous_time)
