@@ -203,17 +203,19 @@ class Ball():
         self.last_contact_player = -1
         self.screen_width, self.screen_height = 0, 0
         self.radius = 5
+        self.last_paddles = None
     
     def draw(self, img: cv2.typing.MatLike):
         cv2.circle(img, (int(self.x), int(self.y)), self.radius, (255, 0, 0), cv2.FILLED)
 
-    def intersects_paddle(self, paddle_start, paddle_end):
+    def intersects_paddle(self, paddle_start, paddle_end, old_paddle_start, old_paddle_end):
         # Based on code from https://stackoverflow.com/a/67117213
         if paddle_start == paddle_end:
             return False
-        x1, y1 = paddle_start
-        x2, y2 = paddle_end
-        cx, cy, r = self.x, self.y, self.radius
+        c1 = (self.x - self.velocity[0] * 2, self.y - self.velocity[1] * 2)
+        c2 = (c1[0] + self.velocity[0] * 5, c1[1] + self.velocity[1] * 5)
+        # Original method (ball intersects paddle right now)
+        '''
         x_linear = x2 - x1
         x_constant = x1 - cx
         y_linear = y2 - y1
@@ -226,11 +228,82 @@ class Ball():
           (-half_b <= a or c + half_b + half_b + a <= 0) and
           (half_b <= 0 or c <= 0)
         )
-        return intersects
+        '''
+        # Second method (path of ball center over next frame intersects paddle)
+        '''
+        def ccw(A,B,C): # Check whether a group of points is sorted counterclockwise
+            return (C[1]-A[1])*(B[0]-A[0]) > (B[1]-A[1])*(C[0]-A[0])
+        
+        intersects = ccw(paddle_start, c1, c2) != ccw(paddle_end, c1, c2) and ccw(paddle_start, paddle_end, c1) != ccw(paddle_start, paddle_end, c2)
+        '''
+        def is_point_in_quad(px, py, quad):
+            # quad = [(x1, y1), (x2, y2), (x3, y3), (x4, y4)] represents the quadrilateral vertices
+            
+            def do_intersect(p1, p2, q1, q2):
+                # Checks if the ray crosses a line segment (p1, p2)
+                # Consider the line formed by q1q2
+                if q1[1] > py and q2[1] > py or q1[1] < py and q2[1] < py:
+                    return False
+                if q1[0] < px and q2[0] < px:
+                    return False
+                if q1[1] > q2[1]:
+                    q1, q2 = q2, q1  # Swap for upward direction
+
+                intersect_x = q1[0] + (py - q1[1]) * (q2[0] - q1[0]) / (q2[1] - q1[1])
+                return intersect_x > px
+
+            # Check if the ray intersects with each edge of the quadrilateral
+            intersections = 0
+            for i in range(len(quad)):
+                q1 = quad[i]
+                q2 = quad[(i + 1) % len(quad)]
+                if do_intersect(px, py, q1, q2):
+                    intersections += 1
+            
+            # If the number of intersections is odd, the point is inside
+            return intersections % 2 == 1
+
+        c1_intersects = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
+        c2_intersects = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
+        if c1_intersects or c2_intersects:
+            return True
+        
+        def orientation(p, q, r):
+            # Compute the orientation of the triplet (p, q, r)
+            val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
+            if val == 0:
+                return 0  # Collinear
+            return 1 if val > 0 else 2  # Clockwise or counterclockwise
+
+        def do_intersect(p1, q1, p2, q2):
+            # Find the four orientations needed for the general and special cases
+            o1 = orientation(p1, q1, p2)
+            o2 = orientation(p1, q1, q2)
+            o3 = orientation(p2, q2, p1)
+            o4 = orientation(p2, q2, q1)
+            
+            # General case
+            if o1 != o2 and o3 != o4:
+                return True
+
+            # Special cases (checking for collinear points)
+            return False
+
+        # Check if the line segment intersects any of the four edges
+        path_intersects_quad = (
+            do_intersect(c1, c2, paddle_start, paddle_end) or
+            do_intersect(c1, c2, paddle_end, old_paddle_end) or
+            do_intersect(c1, c2, old_paddle_end, old_paddle_start) or
+            do_intersect(c1, c2, old_paddle_start, paddle_start)
+        )
+
+        return path_intersects_quad
 
     def paddle_bounce(self, paddles):
-        for player, paddle in enumerate(paddles):
-            if self.last_contact_player == player or not self.intersects_paddle(paddle[0], paddle[1]):
+        if self.last_paddles == None:
+            self.last_paddles = paddles
+        for player, (paddle, old_paddle) in enumerate(zip(paddles, self.last_paddles)):
+            if self.last_contact_player == player or not self.intersects_paddle(*paddle, *old_paddle):
                 continue
             self.last_contact_player = player
             paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
@@ -238,7 +311,7 @@ class Ball():
             if abs(paddle_vec_mag) < EPSILON:
                 paddle_vec_mag = EPSILON * 1 if paddle_vec_mag > 0 else -1
             paddle_vec_normalized = tuple(map(partial(mul, 1/paddle_vec_mag), paddle_vec))
-            
+
             paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
             dot_prod = sum(map(mul, self.velocity, paddle_norm_left))
 
@@ -246,6 +319,7 @@ class Ball():
             print(deflection, self.velocity)
             new_velocity = list(map(add, self.velocity, deflection))
             self.velocity = new_velocity
+        self.last_paddles = paddles
     
     def update(self):
         try:
