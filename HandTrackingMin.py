@@ -204,16 +204,43 @@ class Ball():
         self.screen_width, self.screen_height = 0, 0
         self.radius = 5
         self.last_paddles = None
+        self.drag_threshold = 12
+        self.drag_proportion = 0.95
     
     def draw(self, img: cv2.typing.MatLike):
         cv2.circle(img, (int(self.x), int(self.y)), self.radius, (255, 0, 0), cv2.FILLED)
 
     def intersects_paddle(self, paddle_start, paddle_end, old_paddle_start, old_paddle_end):
-        # Based on code from https://stackoverflow.com/a/67117213
+        # Based on code from https://stackoverflow.com/a/67117213 (not anymore)
         if paddle_start == paddle_end:
             return False
+
         c1 = (self.x - self.velocity[0] * 2, self.y - self.velocity[1] * 2)
         c2 = (c1[0] + self.velocity[0] * 5, c1[1] + self.velocity[1] * 5)
+        
+        if old_paddle_start == old_paddle_end:
+            def orientation(p, q, r):
+                # Compute the orientation of the triplet (p, q, r)
+                val = (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
+                if val == 0:
+                    return 0  # Collinear
+                return 1 if val > 0 else 2  # Clockwise or counterclockwise
+            
+            def do_intersect(p1, q1, p2, q2):
+                # Find the four orientations needed for the general and special cases
+                o1 = orientation(p1, q1, p2)
+                o2 = orientation(p1, q1, q2)
+                o3 = orientation(p2, q2, p1)
+                o4 = orientation(p2, q2, q1)
+                
+                # General case
+                if o1 != o2 and o3 != o4:
+                    return True
+
+                # Special cases (checking for collinear points)
+                return False
+
+            return do_intersect(c1, c2, paddle_start, paddle_end)
         # Original method (ball intersects paddle right now)
         '''
         x_linear = x2 - x1
@@ -263,9 +290,10 @@ class Ball():
             # If the number of intersections is odd, the point is inside
             return intersections % 2 == 1
 
-        c1_intersects = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
-        c2_intersects = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
-        if c1_intersects or c2_intersects:
+        # Return if either point is inside the quadrilateral path
+        c1_inside = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
+        c2_inside = is_point_in_quad(*c1, [paddle_start, paddle_end, old_paddle_start, old_paddle_end])
+        if c1_inside or c2_inside:
             return True
         
         def orientation(p, q, r):
@@ -296,6 +324,8 @@ class Ball():
             do_intersect(c1, c2, old_paddle_end, old_paddle_start) or
             do_intersect(c1, c2, old_paddle_start, paddle_start)
         )
+        
+        # Return if the paddle intersects any of the sides of the quadrilateral path
 
         return path_intersects_quad
 
@@ -305,7 +335,6 @@ class Ball():
         for player, (paddle, old_paddle) in enumerate(zip(paddles, self.last_paddles)):
             if self.last_contact_player == player or not self.intersects_paddle(*paddle, *old_paddle):
                 continue
-            self.last_contact_player = player
             paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
             paddle_vec_mag = math.sqrt(sum(map(partial(pow, exp=2), paddle_vec)))
             if abs(paddle_vec_mag) < EPSILON:
@@ -315,11 +344,34 @@ class Ball():
             paddle_norm_left = (-paddle_vec_normalized[1], paddle_vec_normalized[0])
             dot_prod = sum(map(mul, self.velocity, paddle_norm_left))
 
+            velocity_start = tuple(map(sub, paddle[0], old_paddle[0]))
+            velocity_end = tuple(map(sub, paddle[1], old_paddle[1]))
+            velocity_avg = tuple(map(partial(mul, 1/2), map(add, velocity_start, velocity_end)))
+            velocity_normal_force = tuple(map(partial(mul, sum(map(mul, velocity_avg, paddle_norm_left))), paddle_norm_left))
+
             deflection = tuple(map(partial(mul, (-2 * dot_prod)), paddle_norm_left))
-            print(deflection, self.velocity)
-            new_velocity = list(map(add, self.velocity, deflection))
-            self.velocity = new_velocity
+            print(player)
+            new_velocity = list(map(add, map(add, self.velocity, deflection), velocity_normal_force))
+            if player == 0: # Only register the paddle hit if in the right direction
+                if new_velocity[0] > self.velocity[0]:
+                    self.velocity = new_velocity
+                    self.last_contact_player = player
+            else:
+                if new_velocity[0] < self.velocity[0]:
+                    self.velocity = new_velocity
+                    self.last_contact_player = player
         self.last_paddles = paddles
+        self.cool_off_speed()
+    
+    def cool_off_speed(self):
+        speed_squared = sum(map(partial(pow, exp=2), self.velocity))
+        if speed_squared > self.drag_threshold ** 2:
+            print("drag")
+            old_speed = math.sqrt(speed_squared)
+            speed_drag = old_speed - self.drag_threshold
+            new_speed = self.drag_threshold + speed_drag * self.drag_proportion
+            new_velocity = list(map(partial(mul, new_speed / old_speed), self.velocity))
+            self.velocity = new_velocity
     
     def update(self):
         try:
