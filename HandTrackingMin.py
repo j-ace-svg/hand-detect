@@ -1,3 +1,4 @@
+# Pip modules to install: google, screeninfo
 import cv2
 import mediapipe as mp
 from google.protobuf.json_format import MessageToDict
@@ -5,7 +6,10 @@ import time
 import math
 from operator import add, sub, mul
 from functools import partial
+import screeninfo
 
+SCREEN_ID = 0
+PADDLE_SIZE = 30
 EPSILON = 0.0001
 
 cap = cv2.VideoCapture(0 + cv2.CAP_DSHOW)
@@ -28,13 +32,13 @@ def calc_landmark_distance(finger_coordinates, landmark_start, landmark_end):
                       pow(finger_coordinates[landmark_start][2] - finger_coordinates[landmark_end][2], 2)
                     ) / finger_coordinates["scalar"]
 
-def process_hands(results):
+def process_hands(results, scale_factor):
     finger_coordinates = {}
-    mp_draw.draw_landmarks(img, handLandmarks, mp_hands.HAND_CONNECTIONS)
+    mp_draw.draw_landmarks(img_scaled, handLandmarks, mp_hands.HAND_CONNECTIONS)
 
     for id, landmark in enumerate(handLandmarks.landmark):
         #print(id, lm)
-        height, width, c = img.shape
+        height, width, c = img_scaled.shape
         centerx, centery, centerz = int(landmark.x*width), int(landmark.y*height), int(landmark.z*height)
         match id:
             case 0: # Wrist
@@ -62,8 +66,8 @@ def process_hands(results):
             case _:
                 pass
         if id in (5, 17, 0):
-            cv2.circle(img, (centerx, centery), int(c / 1), (255, 0, 255), cv2.FILLED)
-        cv2.putText(img,str(id), (centerx + 10, centery + 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 1)
+            cv2.circle(img_scaled, (centerx, centery), int(c / 1), (255, 0, 255), cv2.FILLED)
+        cv2.putText(img_scaled,str(id), (centerx + 10, centery + 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 1)
     
     # Cache distance scaling factor
     finger_coordinates["scalar"] = math.sqrt(
@@ -90,6 +94,7 @@ def process_hands(results):
     pinch_list = [False, False, False, False]
     extend_list = [False, False, False, False, False]
 
+    '''
     # Pinch index Gesture
     if finger_coordinates.keys() >= {"thumb_t", "index_t"}:
         if (calc_landmark_distance(finger_coordinates, "thumb_t", "index_t") < gesture_distances["pinch-index"]):
@@ -179,17 +184,18 @@ def process_hands(results):
         #    calc_landmark_distance(finger_coordinates, "ring_k", "ring_t") > 100,
         #    calc_landmark_distance(finger_coordinates, "pinky_k", "pinky_t") > 100)
 
+    '''
     hand_plane = []
     if finger_coordinates.keys() >= {"wrist"}:
-        hand_plane.append(finger_coordinates["wrist"])
+        hand_plane.append(tuple(coord for coord in finger_coordinates["wrist"]))
     else:
         hand_plane.append((0, 0, 0))
     if finger_coordinates.keys() >= {"index_k"}:
-        hand_plane.append(finger_coordinates["index_k"])
+        hand_plane.append(tuple(coord for coord in finger_coordinates["index_k"]))
     else:
         hand_plane.append((0, 0, 0))
     if finger_coordinates.keys() >= {"pinky_k"}:
-        hand_plane.append(finger_coordinates["pinky_k"])
+        hand_plane.append(tuple(coord for coord in finger_coordinates["pinky_k"]))
     else:
         hand_plane.append((0, 0, 0))
 
@@ -385,7 +391,7 @@ class Ball():
         if self.y + self.radius + self.velocity[1] > self.screen_height or self.y - self.radius + self.velocity[1] < 0:
             self.velocity[1] = -self.velocity[1]
 
-def calc_paddle(plane_coords):
+def calc_paddle(plane_coords, paddle_size):
     point_a = plane_coords[0]
     point_b = plane_coords[1]
     point_c = plane_coords[2]
@@ -408,8 +414,6 @@ def calc_paddle(plane_coords):
     paddle_direction_magnitude = math.sqrt(sum(map(partial(pow, exp=2), paddle_direction)))
     paddle_direction_normalized = tuple(map(partial(mul, 1/max(paddle_direction_magnitude, EPSILON)), paddle_direction))
 
-    paddle_size = 40
-
     paddle_start = tuple(map(sub, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
     paddle_end = tuple(map(add, hand_center, map(partial(mul, paddle_size), paddle_direction_normalized)))
 
@@ -420,6 +424,12 @@ ball = Ball(20, 20)
 while True:
     success, img = cap.read()
     img = cv2.flip(img, 1)
+    img_height, img_width, _ = img.shape
+    screen = screeninfo.get_monitors()[SCREEN_ID]
+    scale_x = screen.width / img_width
+    scale_y = screen.height / img_height
+    min_scale = min(scale_x, scale_y)
+    img_scaled = cv2.resize(img, (0, 0), fx = min_scale, fy = min_scale)
     imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     results = hands.process(imgRGB)
 
@@ -430,27 +440,28 @@ while True:
     if results.multi_hand_landmarks:
         for handLandmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
             handedness_dict = MessageToDict(handedness)
-            plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = process_hands(results)
-    
+            plane_coords[handedness_dict["classification"][0]["index"]], movement[handedness_dict["classification"][0]["index"]] = process_hands(results, min_scale)
+
     #print(movement, plane_coords)
-    paddle_coords = [calc_paddle(hand) for hand in plane_coords]
+    paddle_coords = [calc_paddle(hand, PADDLE_SIZE * min_scale) for hand in plane_coords]
     #print(paddle_coords)
     assert(len(paddle_coords[0][0]) == 2)
 
     ball.update()
     ball.paddle_bounce(paddle_coords)
-    ball.draw(img)
+    ball.draw(img_scaled)
     for paddle in paddle_coords:
         paddle_int = [tuple(map(int, point)) for point in paddle]
-        cv2.line(img, paddle_int[0], paddle_int[1], (0, 0, 255), 2)
+        cv2.line(img_scaled, paddle_int[0], paddle_int[1], (0, 0, 255), 2)
 
     current_time = time.time()
     fps = 1/(current_time - previous_time)
     previous_time = current_time
-    cv2.putText(img, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 3,
+    cv2.putText(img_scaled, str(int(fps)), (10, 70), cv2.FONT_HERSHEY_PLAIN, 3,
                 (255, 0, 255), 3)
 
 
-    cv2.imshow("Image", img)
+    cv2.imshow("Image", img_scaled)
+    cv2.setWindowProperty("Image", cv2.WND_PROP_TOPMOST, 1)
     if cv2.waitKey(1) & 0xff == 27: # close window with 'ESC' key
         break
