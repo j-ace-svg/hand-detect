@@ -24,6 +24,8 @@ mp_draw = mp.solutions.drawing_utils
 
 ball = None
 
+debug = False
+
 while True:
     previous_time = 0
     current_time = 0
@@ -214,15 +216,17 @@ while True:
             self.radius = 5
             self.border = 2
             self.last_paddles = None
+            self.paddle_last_seen = [1, 1]
             self.drag_threshold = 12
             self.drag_proportion = 0.95
             self.fps = 0
+            self.debug = False
         
         def draw(self, img: cv2.typing.MatLike):
             cv2.circle(img, (int(self.x), int(self.y)), self.radius + self.border, (255, 255, 255), cv2.FILLED)
             cv2.circle(img, (int(self.x), int(self.y)), self.radius, (255, 0, 0), cv2.FILLED)
 
-        def intersects_paddle(self, paddle_start, paddle_end, old_paddle_start, old_paddle_end, img):
+        def intersects_paddle(self, paddle_start, paddle_end, old_paddle_start, old_paddle_end, img, debug=False):
             # Based on code from https://stackoverflow.com/a/67117213 (not anymore)
             if paddle_start == paddle_end:
                 return False
@@ -322,8 +326,9 @@ while True:
                 o3 = orientation(p2, q2, p1)
                 o4 = orientation(p2, q2, q1)
                 #cv2.circle(img, (int(p1[0]), int(p1[1])), 3, (0, 0, 255), cv2.FILLED)
-                cv2.line(img, (int(p1[0]), int(p1[1])), (int(q1[0]), int(q1[1])), (0, 0, 255), 3, cv2.FILLED)
-                cv2.line(img, (int(p2[0]), int(p2[1])), (int(q2[0]), int(q2[1])), (0, 0, 255), 3, cv2.FILLED)
+                if debug:
+                    cv2.line(img, (int(p1[0]), int(p1[1])), (int(q1[0]), int(q1[1])), (0, 0, 255), 3, cv2.FILLED)
+                    cv2.line(img, (int(p2[0]), int(p2[1])), (int(q2[0]), int(q2[1])), (0, 0, 255), 3, cv2.FILLED)
                 
                 # General case
                 if o1 != o2 and o3 != o4:
@@ -348,7 +353,7 @@ while True:
             if self.last_paddles == None:
                 self.last_paddles = paddles
             for player, (paddle, old_paddle) in enumerate(zip(paddles, self.last_paddles)):
-                if self.last_contact_player == player or not self.intersects_paddle(*paddle, *old_paddle, img):
+                if self.last_contact_player == player or not self.intersects_paddle(*paddle, *old_paddle, img, self.debug):
                     continue
                 paddle_vec = tuple(map(sub, paddle[0], paddle[1]))
                 paddle_vec_mag = math.sqrt(sum(map(partial(pow, exp=2), paddle_vec)))
@@ -361,7 +366,7 @@ while True:
 
                 velocity_start = tuple(map(sub, paddle[0], old_paddle[0]))
                 velocity_end = tuple(map(sub, paddle[1], old_paddle[1]))
-                velocity_avg = tuple(map(partial(mul, 1/2 * fps / 30), map(add, velocity_start, velocity_end)))
+                velocity_avg = tuple(map(partial(mul, 1/2 * fps / 30 / self.paddle_last_seen[player]), map(add, velocity_start, velocity_end)))
                 velocity_normal_force = tuple(map(partial(mul, sum(map(mul, velocity_avg, paddle_norm_left))), paddle_norm_left))
 
                 deflection = tuple(map(partial(mul, (-2 * dot_prod)), paddle_norm_left))
@@ -375,7 +380,16 @@ while True:
                     if new_velocity[0] < self.velocity[0]:
                         self.velocity = new_velocity
                         self.last_contact_player = player
-            self.last_paddles = paddles
+            if paddles[0][0] == paddles[0][1]:
+                self.paddle_last_seen[0] += 1
+            else:
+                self.last_paddles[0] = paddles[0]
+                self.paddle_last_seen[0] = 1
+            if paddles[1][0] == paddles[1][1]:
+                self.paddle_last_seen[1] += 1
+            else:
+                self.last_paddles[1] = paddles[1]
+                self.paddle_last_seen[1] = 1
             self.cool_off_speed()
         
         def cool_off_speed(self):
@@ -438,6 +452,7 @@ while True:
         return [paddle_start, paddle_end]
     
     ball = Ball(-1, -1)
+    ball.debug = debug
 
     winner = 0
 
@@ -452,7 +467,7 @@ while True:
         scale_y = screen.height / img_height
         min_scale = min(scale_x, scale_y) * 1
         img_scaled = cv2.resize(img, (0, 0), fx = min_scale, fy = min_scale)
-        if ball.x == -1 and ball.y == -1: ball.x, ball.y = screen.width / 2, screen.height / 2
+        if ball.x == -1 and ball.y == -1: ball.x, ball.y = img_width * min_scale / 2, img_height * min_scale / 2
         imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         results = hands.process(imgRGB)
 
@@ -488,8 +503,12 @@ while True:
         cv2.imshow("Image", img_scaled)
         cv2.setWindowProperty("Image", cv2.WND_PROP_TOPMOST, 1)
         if winner == 1 or winner == 2:
+            debug = ball.debug
             break
-        if cv2.waitKey(1) & 0xff == 27: # close window with 'ESC' key
+        key = cv2.waitKey(1) & 0xff
+        if key == 27: # close window with 'ESC' key
             winner = -1
             break
+        if key == 100:
+            ball.debug = not ball.debug
     if winner == -1: break
